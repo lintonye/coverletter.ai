@@ -76,7 +76,7 @@ def run_user_profile_chain(resume_pdf, resume_url):
     )
     try:
         result = json.loads(answer.response)
-        st.write("result", result)
+        # st.write("result", result)
         return result
     except json.decoder.JSONDecodeError as e:
         st.write("json parsing failed!", answer)
@@ -110,7 +110,7 @@ Result:
     )
     try:
         result = json.loads("{" + answer.response)
-        st.write("result", result)
+        # st.write("result", result)
         return result
     except json.decoder.JSONDecodeError as e:
         st.write("json parsing failed!", answer)
