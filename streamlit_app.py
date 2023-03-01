@@ -3,7 +3,7 @@ import streamlit as st
 import tempfile
 import json
 import os
-from langchain.llms import OpenAI
+from langchain.llms import OpenAI, OpenAIChat
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
@@ -22,8 +22,8 @@ llm, embeddings, llm_predictor = None, None, None
 @st.cache_resource
 def init_llm(openai_api_key):
     os.environ["OPENAI_API_KEY"] = openai_api_key
-    llm = OpenAI(
-        temperature=0.7,
+    llm = OpenAIChat(
+        temperature=0,
         max_tokens=1000,
         openai_api_key=os.environ["OPENAI_API_KEY"],
     )
