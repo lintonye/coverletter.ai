@@ -97,11 +97,11 @@ def run_company_chain(job_description_url, company_info_url, job_info_text):
     company_chain = build_qa_chain(company_docs)
     answer = company_chain.query(
         """
-You are a job seeker researching a company. You want to infer and extract the company's mission, values and culture.
+You are a job seeker researching a company. You want to extract the job description, the company's mission, values and culture. If the job description is empty, write "Error: No job description found".
 
-Expected format is a JSON object with 4 keys: "company_name" (string), "position_name" (string), "job_description" (string that includes a short summary of qualifications) and "values" (an array of strings). For each item in the "values" array, the value should be a string that includes the description of the company value and your reasoning and a quote from the company's website. Add company mission and culture into "values" too.
+Expected format is a JSON object with 4 keys: "company_name" (string), "position_name" (string), "job_description" (string that includes a short summary of the position and qualifications) and "values" (an array of strings). For each item in the "values" array, the value should be a string that includes the description of the company value and a quote, which is literally copied from the company information in the context. Add company mission and culture into "values" too.
 
-Example: {"company_name": "Google", "position_name": "Software Engineer", "job_description": "We are looking for a software engineer to join our team.", "values": ["We value diversity", "We value work-life balance"]}
+Example: {"company_name": "Google", "position_name": "Software Engineer", "job_description": "We are looking for a software engineer to join our team.", "values": ["Diversity: \"a quote\"", "Work-life balance": \"another quote\", "Mission: \"mission statement quote\"", "Culture: \"culture statement quote\""]]}
 
 Result:
 {        
@@ -110,25 +110,33 @@ Result:
     )
     try:
         result = json.loads("{" + answer.response)
-        # st.write("result", result)
+        st.write("result", result)
         return result
     except json.decoder.JSONDecodeError as e:
         st.write("json parsing failed!", answer)
         raise e
 
 
-def generate_cover_letter(user_profile, company_values, job_description):
+def generate_cover_letter(user_profile, company_values, job_info):
     st.write("Generating cover letter...")
     prompt = PromptTemplate(
-        input_variables=["job_description", "resume", "company_values", "user_name"],
+        input_variables=[
+            "position_name",
+            "job_description",
+            "resume",
+            "company_values",
+            "user_name",
+        ],
         template="""
-Your name is {user_name} and you are applying for the position as described in the context. Write a cover letter that reflects the company's values in the context below. Include the user's real name and professional highlights.
+Your name is {user_name} and you are applying for the position {position_name} as described in the context. Write a cover letter that reflects the company's values in the context below. Include the user's real name and professional highlights.
 
 - Instead of listing all skills and experiences, summarize them into a few sentences.
 - DO NOT copy the qualifications in the job description. 
 - DO NOT include previous employer names.
 
 ###
+
+Position: {position_name}
 
 Job Description: {job_description}
 
@@ -146,7 +154,8 @@ Cover letter:
     llm_chain = LLMChain(llm=llm, prompt=prompt)
     cover_letter = llm_chain.predict(
         verbose=True,
-        job_description=job_description,
+        position_name=job_info["position_name"],
+        job_description=job_info["job_description"],
         resume=user_profile,
         user_name=user_profile["name"],
         company_values="\n".join(company_values),
@@ -198,7 +207,7 @@ if openai_api_key:
 """
 resume_url = st.text_input("Enter your resume URL")
 resume_pdf = st.file_uploader("Or, upload your resume PDF", type=["pdf"])
-user_profile, company_profile = None, None
+user_profile, job_info = None, None
 if resume_pdf or resume_url:
     user_profile = run_user_profile_chain(resume_pdf, resume_url)
 
@@ -214,9 +223,7 @@ job_info_text = st.text_area(
     "Paste anything about the job or the company here", height=200
 )
 if job_info_text or job_description_url or company_info_url:
-    company_profile = run_company_chain(
-        job_description_url, company_info_url, job_info_text
-    )
+    job_info = run_company_chain(job_description_url, company_info_url, job_info_text)
 
 """
 ## Customize it!
@@ -224,12 +231,12 @@ Select the company values you want to include in your cover letter.
 """
 
 user_items = []
-company_items = []
-if company_profile and "values" in company_profile:
-    for value in company_profile["values"]:
+selected_company_values = []
+if job_info and "values" in job_info:
+    for value in job_info["values"]:
         selected = st.checkbox(value)
         if selected:
-            company_items.append(value)
+            selected_company_values.append(value)
 
 # notes = st.text_area("Notes", placeholder="Enter any notes you want to include in the cover letter", height=50)
 generate_clicked = st.button("Generate Cover Letter")
@@ -237,8 +244,8 @@ generate_clicked = st.button("Generate Cover Letter")
 if generate_clicked:
     generate_cover_letter(
         user_profile=user_profile,
-        company_values=company_items,
-        job_description=company_profile["job_description"],
+        company_values=selected_company_values,
+        job_info=job_info,
     )
 
 st.header("Your cover letter")
@@ -253,6 +260,6 @@ feedback_clicked = st.button("Get feedback")
 if feedback_clicked:
     feedback = get_feedback(
         st.session_state["cover-letter"],
-        job_description=company_profile["job_description"],
+        job_description=job_info["job_description"],
     )
     st.write(feedback)
